@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "NewsNinja \u2014 News in context",
+  "version": "1.0.0",
+  "description": "Compare news coverage with transparent, source-linked findings.",
+  "permissions": [
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "http://localhost:8000/*",
+    "http://127.0.0.1:8000/*"
+  ],
+  "action": {
+    "default_title": "Open NewsNinja"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  }
+}
