@@ -5,19 +5,58 @@
   "description": "Compare news coverage with transparent, source-linked findings.",
   "permissions": [
     "activeTab",
-    "scripting"
+    "scripting",
+    "storage"
   ],
   "host_permissions": [
     "http://localhost:8000/*",
     "http://127.0.0.1:8000/*"
   ],
   "action": {
-    "default_title": "Open NewsNinja"
+    "default_title": "Open NewsNinja",
+    "default_icon": {
+      "32": "newsninja-logo.png",
+      "128": "newsninja-logo.png"
+    }
   },
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "background.js",
+    "type": "module"
   },
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*/*",
+        "http://*/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "index.html",
+        "assets/*",
+        "fonts/Inter.ttf",
+        "newsninja-logo.png"
+      ],
+      "matches": [
+        "https://*/*",
+        "http://*/*"
+      ]
+    }
+  ],
+  "options_ui": {
+    "page": "index.html?settings=1",
+    "open_in_tab": true
+  },
+  "icons": {
+    "128": "newsninja-logo.png"
   }
 }

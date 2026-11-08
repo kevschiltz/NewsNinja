@@ -75,11 +75,11 @@ def test_discovery_to_report_pipeline(monkeypatch):
     monkeypatch.setattr(service,'structured',fake_structured)
     def transport(request):
         if request.url.host=='newsapi.org':
-            return httpx.Response(200,json={'articles':[{'title':f'Council pilot report {i}','url':f'https://news{i}.example/story','description':'A pilot report.','source':{'name':f'News {i}'}} for i in range(1,5)]})
+            return httpx.Response(200,json={'status':'ok','articles':[{'title':f'Council approves electric bus pilot {i}','url':f'https://news{i}.example/story','description':'A pilot report.','source':{'name':f'News {i}'}} for i in range(1,4)]})
         return httpx.Response(200,headers={'content-type':'text/html'},text='<article>'+('<p>The pilot includes twenty buses and a public review after two years.</p>'*10)+'</article>')
     real_client=httpx.AsyncClient
     monkeypatch.setattr(service.httpx,'AsyncClient',lambda **kwargs:real_client(transport=httpx.MockTransport(transport),**kwargs))
-    sources,report=asyncio.run(service.analyze(Article(**ARTICLE)))
+    sources,report=asyncio.run(service.analyze(Article(**{**ARTICLE,'title':'Council approves electric bus pilot'})))
     assert len(sources)==3
     assert all(s.content_kind=='extracted' for s in sources)
     assert sources[0].summary=='The pilot includes twenty buses.'
@@ -91,3 +91,18 @@ def test_partial_invalid_citation_drops_entire_finding():
     finding=Finding(title='Mixed',detail='A finding with mixed evidence',evidence=[Evidence(source_id='s1',quote=source.text),Evidence(source_id='fake',quote='Unretrieved source quotation')])
     report=Report(overview=[finding],missing=[],comparisons=[],bigger_picture=[])
     assert not validate_evidence(report,[source]).overview
+
+@pytest.mark.parametrize('code,error_type,status,message',[
+    ('credit_balance_exhausted','insufficient_quota',503,'credits are exhausted'),
+    ('rate_limit_exceeded','requests',429,'temporarily rate limiting'),
+])
+def test_openai_quota_errors(monkeypatch,code,error_type,status,message):
+    from openai import RateLimitError
+    monkeypatch.setenv('OPENAI_API_KEY','test')
+    monkeypatch.setenv('NEWS_API_KEY','test')
+    async def fail(article):
+        raise RateLimitError('Provider error',response=httpx.Response(429,request=httpx.Request('POST','https://api.openai.com/v1/responses')),body={'code':code,'type':error_type})
+    monkeypatch.setattr('app.main.analyze',fail)
+    response=TestClient(app).post('/analyze',json={'article':ARTICLE})
+    assert response.status_code==status
+    assert message in response.json()['detail']

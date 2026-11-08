@@ -1,38 +1,60 @@
-import React, { useEffect, useState } from 'react';
-import { createRoot } from 'react-dom/client';
-import { ArrowUpRight, BookOpen, Check, ChevronRight, CircleHelp, Compass, ExternalLink, Globe2, Layers3, LoaderCircle, Search, ShieldCheck, Sparkles } from 'lucide-react';
-import type { Analysis, Article, Finding, Source } from './types';
-import { demo } from './demo';
-import { extractArticle } from './extract';
+import {Logo} from './Logo';
+import React,{useEffect,useState} from 'react';
+import {createRoot} from 'react-dom/client';
+import {ArrowRight,BookOpen,Compass,Layers3,Settings2,ShieldCheck,Sparkles} from 'lucide-react';
+import type {Source} from './types';
+import {demo} from './demo';
+import {SourceLink,FindingCard,RelatedArticles,OriginalAnalysis,SectionEmpty,AdditionalContext} from './results';
+import {useAnalysis} from './useAnalysis';
+import {useSectionBadges,type Section} from './useSectionBadges';
+import {MiniPanel,Settings} from './panel';
+import {ArticleAnalyzer,AnalysisStatus,CoverageSnapshot,LoadingAnalysis,SectionHeading,DemoLink} from './dashboard';
 import './style.css';
+import './material.css';
 
-const tabs = [{key:'overview',label:'Overview',icon:Compass},{key:'missing',label:"What You’re Missing",icon:Sparkles},{key:'comparisons',label:'Compare Coverage',icon:Layers3},{key:'related',label:'Related Articles',icon:BookOpen},{key:'bigger_picture',label:'Bigger Picture',icon:Globe2}] as const;
-type Tab = typeof tabs[number]['key'];
-function SourceLink({source}:{source:Source}) { return source.url ? <a href={source.url} target="_blank" rel="noreferrer">{source.publisher} <ArrowUpRight size={12}/></a> : <span className="sample-link">{source.publisher} · fictional</span> }
-function FindingCard({finding,index,sources}:{finding:Finding;index:number;sources:Source[]}) {
- return <article className="finding"><span className="number">{String(index+1).padStart(2,'0')}</span><div><h3>{finding.title}</h3><p>{finding.detail}</p><div className="citations">{finding.evidence.map((e,i)=>{const source=sources.find(s=>s.id===e.source_id);return source?<details key={i}><summary><SourceLink source={source}/></summary><blockquote>“{e.quote}”</blockquote></details>:null})}</div></div></article>;
-}
+const views={
+ overview:{title:'The story, simplified.',label:'Article Summary',eyebrow:'02 / ARTICLE INSIGHTS',description:'A grounded summary of the claims, people, and details that matter.'},
+ comparisons:{title:'One event. Different angles.',label:'Source Comparison',eyebrow:'03 / COMPARE COVERAGE',description:'Read headlines side by side, then explore supported differences in reporting.'},
+ missing:{title:'Look beyond the headline.',label:'Missing Context',eyebrow:'04 / ADDITIONAL CONTEXT',description:'Details other reporting brings into focus, with evidence you can inspect.'},
+ bigger_picture:{title:'Understand the bigger picture.',label:'Bigger Picture',eyebrow:'BACKGROUND & CONTEXT',description:'Supported background and uncertainty, beyond a single headline.'},
+};
 function App(){
- const [article,setArticle]=useState<Article|null>(null),[result,setResult]=useState<Analysis|null>(null),[tab,setTab]=useState<Tab>('overview'),[busy,setBusy]=useState(false),[error,setError]=useState(''),[stage,setStage]=useState(0);
- useEffect(()=>{extractArticle().then(setArticle).catch(e=>setError(e.message))},[]);
- useEffect(()=>{if(!busy)return; const id=setInterval(()=>setStage(s=>Math.min(s+1,2)),7000);return()=>clearInterval(id)},[busy]);
- async function analyze(){setBusy(true);setError('');setStage(0);setResult(null);try{const current=await extractArticle();setArticle(current);const response=await fetch('http://localhost:8000/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({article:current}),signal:AbortSignal.timeout(190000)});const body=await response.json();if(!response.ok)throw new Error(typeof body.detail==='string'?body.detail:'The backend could not analyze this article.');setResult(body);setTab('overview')}catch(e){setError(e instanceof TypeError?'Cannot reach the backend. Start FastAPI on localhost:8000 and add this extension’s origin to ALLOWED_ORIGINS.':e instanceof Error?e.message:'Analysis failed. Please retry.')}finally{setBusy(false)}}
- const current=result?.article||article;
- const allSources:Source[]=result?[{...result.article,id:'original',summary:''},...result.sources]:[];
- const active=tabs.find(t=>t.key===tab)!;
- return <div className="app"><aside className="sidebar"><a className="brand" href="#"><span className="logo"><Layers3 size={22}/></span>NewsNinja<span className="brand-dot">.</span></a><div className="workspace-label">YOUR READING COMPANION</div><nav aria-label="Analysis sections">{tabs.map(t=><button key={t.key} onClick={()=>setTab(t.key)} className={tab===t.key?'selected':''}><t.icon size={18}/>{t.label}{t.key==='missing'&&result&&<span className="badge">{result.report.missing.length}</span>}</button>)}</nav><div className="sidebar-bottom"><div className="principle"><ShieldCheck size={20}/><strong>Evidence over labels.</strong><p>No bias scores. Just more of the story.</p></div><div className="local-status"><span/> Local research workspace</div></div></aside>
- <main><header className="topbar"><div><span className="eyebrow">READ BEYOND THE HEADLINE</span><span className="top-sub">A little more context. A fuller perspective.</span></div><span className="private"><ShieldCheck size={14}/> You choose what to analyze</span></header>
- <div className="content"><section className="page-heading"><div className="eyebrow purple">A FULLER PICTURE</div><h1>There’s more to the story<span>.</span></h1><p>See what other coverage adds, questions, and brings into focus.</p></section>
- <section className="article-card"><div className="article-icon"><BookOpen size={24}/></div><div className="article-info"><div className="eyebrow">{result?.mode==='demo'?'FICTIONAL SAMPLE ARTICLE':'YOUR CURRENT ARTICLE'}</div><h2>{current?.title||'Your next perspective starts here'}</h2><div className="article-meta">{current?<><span>{current.publisher}</span>{current.author&&<span>{current.author}</span>}<span>{current.date||'Date unavailable'}</span></>:<span>Open a news article, then click NewsNinja in the Chrome toolbar.</span>}</div></div><button className="primary" disabled={busy} onClick={analyze}>{busy?<LoaderCircle className="spin" size={16}/>:<Sparkles size={16}/>} {busy?'Analyzing…':'Analyze Article'}</button></section>
- <div className="demo-bar"><span><span className="demo-tag">DEMO</span>Explore a fictional example. No API keys needed.</span><button disabled={busy} onClick={()=>{setResult(demo);setTab('overview');setError('')}}>Load sample analysis <ChevronRight size={14}/></button></div>
- {error&&<div role="alert" className="error">{error}</div>}
- {busy&&<section className="loading" role="status"><LoaderCircle className="spin" size={32}/><h2>{['Identifying the event','Finding and reading related coverage','Comparing the available evidence'][stage]}</h2><p>Searching, reading, and checking citations can take a few minutes.</p></section>}
- {!busy&&result&&<><div className="analysis-meta"><span><span className="status-dot"/>{result.mode==='demo'?'FICTIONAL DEMO · NOT LIVE ANALYSIS':'LIVE ANALYSIS'}</span><span>{result.sources.length+1} sources considered · Extracted text may be partial</span></div><div className="mobile-tabs">{tabs.map(t=><button onClick={()=>setTab(t.key)} className={tab===t.key?'selected':''} key={t.key}>{t.label}</button>)}</div><div className="section-heading"><div><div className="eyebrow">{tab==='missing'?'THE DETAILS THAT ADD UP':'YOUR COVERAGE BRIEF'}</div><h2>{active.label}</h2></div><active.icon size={23}/></div>
- {tab==='comparisons'&&<div className="headline-grid">{allSources.map(s=><article key={s.id}><span className="eyebrow">{s.id==='original'?'YOUR ARTICLE':s.publisher}</span><h3>{s.title}</h3><SourceLink source={s}/></article>)}</div>}
- {tab==='related'?<div className="related-grid">{result.sources.map(s=><article className="source-card" key={s.id}><div className="eyebrow">{s.publisher}</div><h3>{s.title}</h3><small>{s.date||'Date unavailable'} · {s.content_kind==='extracted'?'Extracted article text':'Snippet only'}</small><p>{s.summary||s.text.slice(0,240)}</p><SourceLink source={s}/></article>)}</div>:<div className="findings">{result.report[tab].length?result.report[tab].map((f,i)=><FindingCard key={i} finding={f} index={i} sources={allSources}/>):<div className="empty"><Search size={25}/><h3>No supported findings in this section</h3><p>The available evidence was too limited to make a reliable comparison.</p></div>}</div>}
- {tab==='overview'&&<><div className="discovery"><div><span className="eyebrow purple">GO A LAYER DEEPER</span><h3>What didn’t make it into your article?</h3><p>Explore details and perspectives found in other coverage.</p></div><button onClick={()=>setTab('missing')}>Explore {result.report.missing.length} findings <ArrowUpRight size={17}/></button></div><div className="source-strip"><span>IN THIS COMPARISON</span>{result.sources.map(s=><SourceLink key={s.id} source={s}/>)}</div></>}
- <div className="limitations"><CircleHelp size={17}/><div><strong>Context, with care</strong>{result.limitations.map((l,i)=><p key={i}>{l}</p>)}</div></div></>}
- {!busy&&!result&&<section className="welcome"><div className="welcome-mark"><Compass size={36}/></div><h2>One story. More perspectives.</h2><p>Analyze your current article to find common ground, missing context, and meaningful differences across publications.</p><div className="steps"><span><Check size={15}/> Source-linked findings</span><span><Check size={15}/> No arbitrary bias scores</span><span><Check size={15}/> Clear about uncertainty</span></div><button onClick={()=>{setResult(demo);setError('')}}>Take a look at the demo <ArrowUpRight size={16}/></button></section>}
- <footer><span className="brand-small"><Layers3 size={15}/> NewsNinja</span><span>Read widely. Think independently.</span><span>Built for curious minds <ExternalLink size={12}/></span></footer></div></main></div>
+ const {article,result,busy,error,setError,analyze,loadAnalysis:storeAnalysis,retryRead}=useAnalysis();
+ const [tab,setTab]=useState<Section>('overview');
+ const [showAnalyzer,setShowAnalyzer]=useState(true);
+ const {unread,markRead,resetUnread}=useSectionBadges(result);
+ function openTab(next:Section){setShowAnalyzer(false);if(result){if(tab==='overview'&&next!=='overview')markRead('overview');markRead(next)}setTab(next)}
+ function openAnalyzer(){if(result&&tab==='overview'&&!showAnalyzer)markRead('overview');setShowAnalyzer(true)}
+ function loadDemo(){setShowAnalyzer(false);void storeAnalysis(demo);resetUnread();setTab('overview');setError('')}
+ useEffect(()=>{if(result){setTab('overview');setShowAnalyzer(false)}},[result]);
+ const current=result?.mode==='demo'?article:result?.article||article;
+ const allSources:Source[]=result?[{...result.article,id:'original',summary:''},...result.sources,...(result.broader_sources||[]).slice(0,3)]:[];
+ const heading=views[tab];
+ const Badge=({section}:{section:Section})=>unread(section)>0?<span className="badge" aria-label={`${unread(section)} unread items`}>{unread(section)}</span>:null;
+ const navButton=(section:Section)=><button onClick={()=>openTab(section)} className={!showAnalyzer&&tab===section?'selected':''} aria-current={!showAnalyzer&&tab===section?'page':undefined}>{views[section].label}<Badge section={section}/></button>;
+ return <div className="app material-dashboard">
+  <a className="skip-link" href="#analysis-content">Skip to analysis</a>
+  <header className="dashboard-header"><a className="brand" href="#analyzer" onClick={e=>{e.preventDefault();openAnalyzer()}} aria-label="NewsNinja article analyzer"><Logo/>NewsNinja<span className="brand-caption">News intelligence</span></a><nav aria-label="Main navigation"><button onClick={openAnalyzer} className={showAnalyzer?'selected':''} aria-current={showAnalyzer?'page':undefined}>Analyzer</button>{navButton('overview')}{navButton('comparisons')}{navButton('missing')}{navButton('bigger_picture')}</nav><button className="icon-button" aria-label="Open NewsNinja settings" onClick={()=>globalThis.chrome?.runtime?.id?void chrome.runtime.openOptionsPage():window.location.assign('?settings=1')}><Settings2 size={20}/></button></header>
+  <main className="content">{showAnalyzer&&<><section className="dashboard-hero"><div><span className="hero-chip"><span/> YOUR DAILY DOSE OF PERSPECTIVE</span><h1>Read the story.<br/><span>See the bigger picture.</span></h1><p>Go beyond one headline. Understand the reporting, compare the evidence, and find the context that matters.</p></div><div className="hero-motif hero-ninja" aria-hidden="true"><Logo/></div></section>
+   <ArticleAnalyzer article={current||null} busy={busy} onAnalyze={analyze}/>
+   <DemoLink onClick={loadDemo} disabled={busy}/></>}
+   {error&&<section className="error dashboard-error" role="alert"><div><strong>We couldn’t complete that step.</strong><p>{error}</p></div><button className="tonal-button" disabled={busy} onClick={()=>void retryRead()}>Retry reading article</button></section>}
+   <div id="analysis-content" tabIndex={-1}>
+    {busy&&<LoadingAnalysis/>}
+    {!busy&&result&&!showAnalyzer&&<><AnalysisStatus result={result}/>
+     <SectionHeading {...heading}/>
+     {tab==='overview'&&<><CoverageSnapshot result={result}/><OriginalAnalysis report={result.report} sources={allSources}/></>}
+     {tab==='missing'&&<AdditionalContext report={result.report} sources={allSources}/>}
+     {tab==='comparisons'&&<><article className="comparison-original"><span className="step-label">ORIGINAL ARTICLE</span><h3>{result.article.title}</h3><SourceLink source={allSources[0]}/></article><RelatedArticles sources={result.sources} broader={result.broader_sources}/></>}
+     {<div className="findings">{result.report[tab].length?result.report[tab].map((f,i)=><FindingCard key={i} finding={f} index={i} sources={allSources}/>):<SectionEmpty section={tab}/>}</div>}
+     {tab==='overview'&&<section className="context-callout"><span className="context-symbol"><Sparkles size={25}/></span><div><span className="step-label">KEEP EXPLORING</span><h3>There may be more to the story.</h3><p>Explore supported additional reporting and the evidence behind it.</p></div><button className="primary" onClick={()=>openTab('missing')}>Explore context <ArrowRight size={16}/></button></section>}
+     <details className="limitations disclosure"><summary><ShieldCheck size={17}/> About the evidence and its limits</summary><div>{result.limitations.map((l,i)=><p key={i}>{l}</p>)}</div></details>
+    </>}
+    {!busy&&!result&&<section className="getting-started"><SectionHeading eyebrow="A CLEARER WAY TO READ" title="Perspective starts with evidence." description="Your analysis will appear here. Start with an article or explore the fictional demo."/><div className="getting-started-grid">{[{icon:BookOpen,title:'Understand the article',text:'A concise summary, supported takeaways, and the claims being made.'},{icon:Layers3,title:'Compare the reporting',text:'Real source links and differences grounded in the available coverage.'},{icon:Compass,title:'Find the context',text:'Additional details, background, and clear explanations of uncertainty.'}].map((item,i)=><article key={item.title}><item.icon size={22}/><span>0{i+1}</span><h3>{item.title}</h3><p>{item.text}</p></article>)}</div></section>}
+   </div>
+   <footer><span className="brand-small"><Logo/>NewsNinja <span>· Read critically. Understand fully.</span></span><span><ShieldCheck size={14}/> Evidence over labels.</span></footer>
+  </main>
+ </div>;
 }
-createRoot(document.getElementById('root')!).render(<React.StrictMode><App/></React.StrictMode>);
+const params=new URLSearchParams(location.search);
+createRoot(document.getElementById('root')!).render(<React.StrictMode>{params.has('settings')?<Settings/>:params.has('embedded')?<MiniPanel/>:<App/>}</React.StrictMode>);
